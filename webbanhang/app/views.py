@@ -451,3 +451,12 @@ def manage_inventory(request):
 from django.http import JsonResponse
 import json
 
+def apply_voucher(request):
+    data = json.loads(request.body)
+    voucher_code = data.get('code')
+    
+    try:
+        voucher = Voucher.objects.get(code=voucher_code, active=True)
+        return JsonResponse({'success': True, 'discount': voucher.discount_amount})
+    except Voucher.DoesNotExist:
+        return JsonResponse({'success': False, 'message': 'Mã không tồn tại hoặc đã hết hạn!'})
