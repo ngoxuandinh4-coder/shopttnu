@@ -121,7 +121,7 @@
                                 {{ hist_order.status }}
                             </span>
                         </td>
-                        <td class="fw-bold text-danger">{{ hist_order.get_cart_total|floatformat:0|intcomma }}đ</td>
+                        <td class="fw-bold text-danger">{{ hist_order.get_cart_total_after_discount|floatformat:0|intcomma }}đ</td>
                         <td class="text-center">
                             <button type="button" class="btn btn-sm btn-primary px-3 fw-bold" data-bs-toggle="modal" data-bs-target="#orderModal{{ hist_order.id }}">Xem</button>
                         </td>
@@ -156,15 +156,40 @@
                 {% endfor %}
                 <div class="d-flex justify-content-between mt-3">
                     <h5 class="fw-bold mb-0">Tổng cộng:</h5>
-                    <h5 class="text-danger fw-bold mb-0">{{ hist_order.get_cart_total|floatformat:0|intcomma }}đ</h5>
+                    <h5 class="text-danger fw-bold mb-0">{{ hist_order.get_cart_total_after_discount|floatformat:0|intcomma }}đ</h5>
                 </div>
             </div>
             <div class="modal-footer border-0">
                 {% if hist_order.status == 'Chờ xác nhận' or hist_order.status == 'Đã xác nhận' %}
                     <a href="{% url 'cancelOrder' hist_order.id %}" class="btn btn-danger btn-sm" onclick="return confirm('Bạn có chắc muốn hủy đơn này?')">Hủy đơn hàng</a>
                 {% endif %}
+                {% if hist_order.status == 'Đã giao' %}
+                    <button type="button" class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#returnModal{{ hist_order.id }}" data-bs-dismiss="modal">Yêu cầu trả hàng</button>
+                {% endif %}
                 <button type="button" class="btn btn-secondary btn-sm px-3" data-bs-dismiss="modal">Đóng</button>
             </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="returnModal{{ hist_order.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="border-radius: 15px;">
+            <form method="POST" action="{% url 'return_order' hist_order.id %}">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold">Yêu cầu trả hàng đơn #{{ hist_order.id }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <label class="form-label fw-bold">Lý do trả hàng</label>
+                    <textarea name="reason" class="form-control" rows="4" required placeholder="Ví dụ: Sản phẩm lỗi, sai size, không đúng mô tả..."></textarea>
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Đóng</button>
+                    <button type="submit" class="btn btn-warning btn-sm fw-bold">Gửi yêu cầu</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -204,19 +229,33 @@
                     return;
                 }
 
+                let selectedTotal = 0;
+                document.querySelectorAll('.item-checkbox:checked').forEach(checkbox => {
+                    let rawTotal = (checkbox.dataset.total || "0").toString().replace(/\./g, '').replace(/,/g, '');
+                    selectedTotal += parseFloat(rawTotal);
+                });
+
+                if (selectedTotal <= 0) {
+                    document.getElementById('voucher-message').innerHTML = '<span class="text-danger">Vui lòng tích chọn sản phẩm trước khi áp dụng voucher!</span>';
+                    return;
+                }
+
                 fetch('/apply_voucher/', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'X-CSRFToken': token
                     },
-                    body: JSON.stringify({'code': code})
+                    body: JSON.stringify({
+                        'code': code,
+                        'total': selectedTotal
+                    })
                 })
                 .then(response => response.json())
                 .then(data => {
                     if(data.success) {
                         appliedDiscount = data.discount;
-                        document.getElementById('voucher-message').innerHTML = '<span class="text-success">✅ Đã áp dụng giảm ' + data.discount.toLocaleString('vi-VN') + 'đ</span>';
+                        document.getElementById('voucher-message').innerHTML = '<span class="text-success">' + data.message + '</span>';
                         calculateSummary(); 
                     } else {
                         appliedDiscount = 0;

@@ -96,7 +96,7 @@
         <div class="col-12">
             <h4 class="fw-bold border-bottom pb-3">Đánh giá từ khách hàng</h4>
             
-            {% if request.user.is_authenticated %}
+            {% if request.user.is_authenticated and can_review %}
             <div class="card border-0 bg-light mb-4 shadow-sm mt-3">
                 <div class="card-body p-4">
                     <h6 class="fw-bold mb-3">Gửi đánh giá của bạn</h6>
@@ -119,6 +119,12 @@
                     </form>
                 </div>
             </div>
+            {% elif request.user.is_authenticated and has_reviewed %}
+            <div class="alert alert-info mt-3">Bạn đã đánh giá sản phẩm này rồi.</div>
+            {% elif request.user.is_authenticated %}
+            <div class="alert alert-warning mt-3">Bạn chỉ có thể đánh giá sau khi mua sản phẩm và đơn hàng đã giao thành công.</div>
+            {% else %}
+            <div class="alert alert-light border mt-3">Vui lòng đăng nhập để đánh giá sau khi mua hàng.</div>
             {% endif %}
 
             <div class="mt-4">

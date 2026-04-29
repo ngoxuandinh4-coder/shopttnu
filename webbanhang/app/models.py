@@ -95,6 +95,12 @@ class Order(models.Model):
     payment_method = models.CharField(max_length=50, default='COD', verbose_name="Phương thức thanh toán")
     status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='Chờ xác nhận', verbose_name="Trạng thái đơn hàng")
     return_reason = models.TextField(null=True, blank=True, verbose_name="Lý do trả hàng")
+
+    # === VOUCHER ĐÃ ÁP DỤNG CHO ĐƠN HÀNG ===
+    voucher = models.ForeignKey('Voucher', on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Voucher đã dùng")
+    voucher_discount = models.FloatField(default=0, verbose_name="Số tiền được giảm")
+    final_total = models.FloatField(default=0, verbose_name="Tổng tiền sau giảm")
+    stock_restored = models.BooleanField(default=False, verbose_name="Đã hoàn kho")
     
     class Meta:
         verbose_name = "Đơn hàng"
@@ -114,6 +120,46 @@ class Order(models.Model):
         orderitems = self.orderitem_set.all()
         total = sum([item.quantity for item in orderitems])
         return total
+
+    @property
+    def get_cart_total_after_discount(self):
+        # Nếu đơn đã chốt và có lưu final_total thì ưu tiên lấy tổng đã giảm
+        if self.complete and self.final_total and self.final_total > 0:
+            return self.final_total
+
+        total = self.get_cart_total - self.voucher_discount
+        if total < 0:
+            total = 0
+        return total
+
+    def has_enough_stock(self):
+        """Kiểm tra toàn bộ sản phẩm trong đơn còn đủ tồn kho để chốt đơn hay không."""
+        for item in self.orderitem_set.select_related('product').all():
+            if item.product and item.product.stock is not None and item.quantity > item.product.stock:
+                return False, item
+        return True, None
+
+    def reduce_stock(self):
+        """Trừ tồn kho sau khi đặt hàng thành công."""
+        for item in self.orderitem_set.select_related('product').all():
+            product = item.product
+            if product and product.stock is not None:
+                product.stock = max(0, product.stock - item.quantity)
+                product.save(update_fields=['stock'])
+
+    def restore_stock(self):
+        """Cộng lại tồn kho khi đơn bị hủy hoặc được hoàn hàng. Chỉ hoàn kho 1 lần."""
+        if self.stock_restored:
+            return
+
+        for item in self.orderitem_set.select_related('product').all():
+            product = item.product
+            if product:
+                product.stock = (product.stock or 0) + item.quantity
+                product.save(update_fields=['stock'])
+
+        self.stock_restored = True
+        self.save(update_fields=['stock_restored'])
 
 
 # 4. BẢNG CHI TIẾT ĐƠN HÀNG
@@ -197,11 +243,40 @@ class StockReceipt(models.Model):
     
 
 class Voucher(models.Model):
+    DISCOUNT_TYPE_CHOICES = (
+        ('amount', 'Giảm theo số tiền'),
+        ('percent', 'Giảm theo phần trăm'),
+    )
+
     code = models.CharField(max_length=50, unique=True, verbose_name="Mã Voucher")
-    discount_amount = models.IntegerField(verbose_name="Số tiền giảm (VND)")
+    discount_type = models.CharField(
+        max_length=20,
+        choices=DISCOUNT_TYPE_CHOICES,
+        default='amount',
+        verbose_name="Loại giảm giá"
+    )
+    discount_amount = models.IntegerField(default=0, verbose_name="Số tiền giảm (VND)")
+    discount_percent = models.IntegerField(default=0, verbose_name="Phần trăm giảm (%)")
     active = models.BooleanField(default=True, verbose_name="Kích hoạt")
-    
+
+    def get_discount(self, total):
+        try:
+            total = float(total)
+        except (TypeError, ValueError):
+            total = 0
+
+        if self.discount_type == 'percent':
+            percent = max(0, min(self.discount_percent, 100))
+            discount = total * percent / 100
+        else:
+            discount = self.discount_amount
+
+        # Không cho giảm vượt quá tổng đơn
+        return min(float(discount), total)
+
     def __str__(self):
+        if self.discount_type == 'percent':
+            return f"{self.code} - Giảm {self.discount_percent}%"
         return f"{self.code} - Giảm {self.discount_amount} VND"
 
 class FlashSale(models.Model):
@@ -213,6 +288,3 @@ class FlashSale(models.Model):
 
     def __str__(self):
         return f"{self.name} - Giảm {self.discount_percent}%"
-# Cập nhật thêm trường vào Order để lưu voucher khách đã dùng
-# (Trong class Order của bạn, hãy thêm trường này)
-# voucher = models.ForeignKey(Voucher, on_delete=models.SET_NULL, null=True, blank=True)

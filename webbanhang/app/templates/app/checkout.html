@@ -45,14 +45,14 @@
                         <h5 class="mb-3 fw-bold text-primary">Quét mã QR để thanh toán</h5>
                         
                         <div class="p-2 rounded d-inline-block mb-3 border">
-                            <img src="https://img.vietqr.io/image/MB-0397118013-compact2.png?amount={{ total_selected|stringformat:'.0f' }}&addInfo=Thanh%20toan%20don%20hang%20{{ order.id }}&accountName=NGO%20XUAN%20DINH" 
+                            <img src="https://img.vietqr.io/image/MB-0397118013-compact2.png?amount={{ final_total|stringformat:'.0f' }}&addInfo={{ checkout_transaction_id }}&accountName=NGO%20XUAN%20DINH" 
                                  alt="Mã QR Thanh Toán" 
                                  class="img-fluid" 
                                  style="max-width: 250px;">
                         </div>
 
                         <p class="mb-1">Số tài khoản: <strong class="text-danger fs-5">0397118013</strong></p>
-                        <p class="mb-0 text-muted"><small><i>Nội dung: "Thanh toan don hang {{order.id}}"</i></small></p>
+                        <p class="mb-0 text-muted"><small><i>Nội dung: "{{ checkout_transaction_id }}"</i></small></p>
                     </div>
                     
                     <hr>
@@ -90,8 +90,19 @@
     <h5><strong>{{ count_selected }}</strong></h5>
 </div>
 <div class="d-flex justify-content-between mt-2">
+    <span>Tạm tính:</span>
+    <strong>{{ total_selected|floatformat:0|intcomma }} VND</strong>
+</div>
+{% if voucher %}
+<div class="d-flex justify-content-between mt-2 text-success">
+    <span>Voucher {{ voucher.code }}:</span>
+    <strong>-{{ voucher_discount|floatformat:0|intcomma }} VND</strong>
+</div>
+{% endif %}
+<hr>
+<div class="d-flex justify-content-between mt-2">
     <h5 class="text-danger fw-bold">Tổng thanh toán:</h5>
-    <h4 class="text-danger fw-bold">{{ total_selected|floatformat:0|intcomma }} VND</h4>
+    <h4 class="text-danger fw-bold">{{ final_total|floatformat:0|intcomma }} VND</h4>
 </div>
             </div>
         </div>

@@ -9,61 +9,93 @@ from .forms import CreateUserForm
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import update_session_auth_hash
 from django.core.cache import cache
+from django.db import transaction
+from django.utils import timezone
 from .models import Voucher
 
 
+
+@login_required(login_url='login')
 def add_review(request, product_id):
-    if request.method == 'POST' and request.user.is_authenticated:
-        content = request.POST.get('content')
-        rating = request.POST.get('rating')
-        product = Product.objects.get(id=product_id)
-        
-        Review.objects.create(
-            product=product,
-            customer=request.user,
-            content=content,
-            rating=rating
-        )
-        messages.success(request, "Cảm ơn bạn đã đánh giá sản phẩm!")
-    return redirect(request.META.get('HTTP_REFERER'))
+    if request.method != 'POST':
+        return redirect('detail', id=product_id)
+
+    product = Product.objects.get(id=product_id)
+
+    # Chỉ khách đã mua và đơn đã giao mới được đánh giá
+    has_bought = OrderItem.objects.filter(
+        product=product,
+        order__customer=request.user,
+        order__complete=True,
+        order__status='Đã giao'
+    ).exists()
+
+    if not has_bought:
+        messages.error(request, 'Bạn chỉ có thể đánh giá sản phẩm sau khi đã mua và đơn hàng đã giao thành công!')
+        return redirect('detail', id=product_id)
+
+    if Review.objects.filter(product=product, customer=request.user).exists():
+        messages.warning(request, 'Bạn đã đánh giá sản phẩm này rồi!')
+        return redirect('detail', id=product_id)
+
+    content = (request.POST.get('content') or '').strip()
+    try:
+        rating = int(request.POST.get('rating', 5))
+    except (TypeError, ValueError):
+        rating = 5
+    rating = max(1, min(rating, 5))
+
+    if not content:
+        messages.error(request, 'Vui lòng nhập nội dung đánh giá!')
+        return redirect('detail', id=product_id)
+
+    Review.objects.create(
+        product=product,
+        customer=request.user,
+        content=content,
+        rating=rating
+    )
+    messages.success(request, 'Cảm ơn bạn đã đánh giá sản phẩm!')
+    return redirect('detail', id=product_id)
+
 @login_required(login_url='login')
 def returnOrder(request, id):
     if request.method == 'POST':
         try:
-            order = Order.objects.get(id=id, customer=request.user)
-            reason = request.POST.get('reason')
-            
+            order = Order.objects.get(id=id, customer=request.user, complete=True)
+            reason = (request.POST.get('reason') or '').strip()
+
             # Chỉ cho phép trả hàng khi đơn đã ở trạng thái "Đã giao"
             if order.status == 'Đã giao':
                 order.status = 'Yêu cầu trả hàng'
                 order.return_reason = reason
-                order.save()
+                order.save(update_fields=['status', 'return_reason'])
                 messages.success(request, f'Đã gửi yêu cầu trả hàng cho đơn #{order.id}. Shop sẽ liên hệ bạn sớm!')
             else:
                 messages.error(request, 'Đơn hàng chưa giao hoặc đã xử lý, không thể yêu cầu trả hàng!')
-                
+
         except Order.DoesNotExist:
             messages.error(request, 'Đơn hàng không tồn tại!')
-            
-    return redirect('profile')
+
+    return redirect('cart')
+
 @login_required(login_url='login')
 def cancelOrder(request, id):
     try:
-        # Tìm đơn hàng dựa trên ID và người dùng hiện tại
-        order = Order.objects.get(id=id, customer=request.user)
-        
-        # Chỉ cho phép hủy nếu đơn ở trạng thái 'Chờ xác nhận' hoặc 'Đã xác nhận'
+        order = Order.objects.get(id=id, customer=request.user, complete=True)
+
+        # Chỉ cho phép hủy nếu đơn chưa giao đi xa
         if order.status in ['Chờ xác nhận', 'Đã xác nhận']:
             order.status = 'Đã hủy'
-            order.save()
-            messages.success(request, f'✅ Đã hủy thành công đơn hàng #{order.id}!')
+            order.save(update_fields=['status'])
+            order.restore_stock()
+            messages.success(request, f'✅ Đã hủy thành công đơn hàng #{order.id} và hoàn lại tồn kho!')
         else:
             messages.error(request, 'Không thể hủy đơn hàng này do đang giao hoặc đã hoàn thành!')
-            
+
     except Order.DoesNotExist:
         messages.error(request, 'Đơn hàng không tồn tại!')
-        
-    # --- ĐỔI TẠI ĐÂY: Chuyển hướng về trang giỏ hàng (cart) ---
+
     return redirect('cart')
 
 @login_required(login_url='login')
@@ -104,29 +136,58 @@ def profile(request):
     }
     return render(request, 'app/profile.html', context)
 def detail(request, id):
-    # 1. Tìm đúng sản phẩm theo ID
     product = Product.objects.get(id=id)
-    
-    # 2. Copy đoạn code lấy Giỏ hàng & Danh mục (để thanh Menu không bị lỗi)
+
     if request.user.is_authenticated:
-        customer = request.user 
+        customer = request.user
         order, created = Order.objects.get_or_create(customer=customer, complete=False)
         cartItems = order.get_cart_items
+        has_bought = OrderItem.objects.filter(
+            product=product,
+            order__customer=customer,
+            order__complete=True,
+            order__status='Đã giao'
+        ).exists()
+        has_reviewed = Review.objects.filter(product=product, customer=customer).exists()
+        can_review = has_bought and not has_reviewed
     else:
         order = {'get_cart_total': 0, 'get_cart_items': 0}
         cartItems = order['get_cart_items']
-        
+        has_bought = False
+        has_reviewed = False
+        can_review = False
+
     categories = Category.objects.all()
 
-    # 3. Gửi dữ liệu sang trang HTML
-    context = {'product': product, 'cartItems': cartItems, 'categories': categories}
+    context = {
+        'product': product,
+        'cartItems': cartItems,
+        'categories': categories,
+        'can_review': can_review,
+        'has_bought': has_bought,
+        'has_reviewed': has_reviewed,
+    }
     return render(request, 'app/detail.html', context)
 def category(request):
-    categories=Category.objects.filter(is_sub=False)
-    active_category=request.GET.get('category','')
+    if request.user.is_authenticated:
+        order, created = Order.objects.get_or_create(customer=request.user, complete=False)
+        cartItems = order.get_cart_items
+    else:
+        cartItems = 0
+
+    categories = Category.objects.filter(is_sub=False)
+    active_category = request.GET.get('category', '')
+    products = Product.objects.all()
+
     if active_category:
-        products=Product.objects.filter(category__slug=active_category)
-    context = {'categories':categories,'products':products,'active_category':active_category}
+        products = Product.objects.filter(category__slug=active_category)
+
+    context = {
+        'categories': categories,
+        'products': products,
+        'active_category': active_category,
+        'cartItems': cartItems,
+    }
     return render(request, 'app/category.html', context)
 def search(request):
     # --- PHẦN 1: TÍNH SỐ LƯỢNG GIỎ HÀNG (Giống hệt hàm home) ---
@@ -148,7 +209,7 @@ def search(request):
 
     # --- PHẦN 3: GỬI CẢ SẢN PHẨM LẪN SỐ GIỎ HÀNG SANG HTML ---
     # THÊM 'cartItems': cartItems vào đây để giao diện nhận được số
-    context = {'query': query, 'products': products, 'cartItems': cartItems}
+    context = {'query': query, 'products': products, 'cartItems': cartItems, 'categories': Category.objects.all()}
     return render(request, 'app/search.html', context)
 def register(request):
     form = CreateUserForm()
@@ -244,134 +305,161 @@ def cart(request):
         messages.warning(request, 'Bạn cần đăng nhập để xem giỏ hàng!')
         return redirect('login')
 
+
+@login_required(login_url='login')
 def checkout(request):
-    if request.user.is_authenticated:
-        customer = request.user
-        # Lấy giỏ hàng hiện tại của khách
-        current_order, created = Order.objects.get_or_create(customer=customer, complete=False)
-        
-        # Lấy danh sách ID và Size khách đã tích chọn từ URL (Giỏ hàng gửi sang)
-        selected_ids = request.GET.getlist('id')
-        selected_sizes = request.GET.getlist('size')
-        
-        items = []
-        total_selected = 0
-        count_selected = 0
+    customer = request.user
+    current_order, created = Order.objects.get_or_create(customer=customer, complete=False)
 
-        if selected_ids:
-            all_items = current_order.orderitem_set.all()
-            for i in range(len(selected_ids)):
-                # Xử lý size rỗng từ URL để khớp với Database (None)
-                s_size = selected_sizes[i] if i < len(selected_sizes) and selected_sizes[i] != '' else None
-                
-                # Tìm item khớp ID và Size
-                item = all_items.filter(product_id=selected_ids[i], size=s_size).first()
-                if item:
-                    items.append(item)
-                    total_selected += item.get_total
-                    count_selected += item.quantity
-        else:
-            # Nếu không có sản phẩm nào được chọn, quay về giỏ hàng
-            return redirect('cart')
+    selected_ids = request.GET.getlist('id')
+    selected_sizes = request.GET.getlist('size')
+    voucher_code = request.GET.get('voucher', '').strip()
 
-        # XỬ LÝ KHI BẤM NÚT "XÁC NHẬN ĐẶT HÀNG" (POST)
-        if request.method == 'POST':
-            name = request.POST.get('name')
-            phone = request.POST.get('phone')
-            address = request.POST.get('address')
-            payment_method = request.POST.get('payment_method', 'COD')
+    items = []
+    total_selected = 0
+    count_selected = 0
 
-            # 1. Tạo đơn hàng mới (Chốt đơn)
+    if selected_ids:
+        all_items = current_order.orderitem_set.select_related('product').all()
+        for i in range(len(selected_ids)):
+            s_size = selected_sizes[i] if i < len(selected_sizes) and selected_sizes[i] != '' else None
+            item = all_items.filter(product_id=selected_ids[i], size=s_size).first()
+            if item:
+                items.append(item)
+                total_selected += item.get_total
+                count_selected += item.quantity
+    else:
+        return redirect('cart')
+
+    if not items:
+        messages.error(request, 'Không tìm thấy sản phẩm hợp lệ để thanh toán!')
+        return redirect('cart')
+
+    voucher = None
+    voucher_discount = 0
+    final_total = total_selected
+
+    if voucher_code:
+        try:
+            voucher = Voucher.objects.get(code__iexact=voucher_code, active=True)
+            voucher_discount = voucher.get_discount(total_selected)
+            final_total = max(0, total_selected - voucher_discount)
+        except Voucher.DoesNotExist:
+            voucher = None
+            voucher_discount = 0
+            final_total = total_selected
+
+    # Mã này sẽ được lưu thật vào Order.transaction_id để QR không còn dùng nhầm ID giỏ tạm
+    checkout_transaction_id = request.session.get('checkout_transaction_id')
+    if not checkout_transaction_id:
+        checkout_transaction_id = f"DH{customer.id}{timezone.now().strftime('%Y%m%d%H%M%S')}"
+        request.session['checkout_transaction_id'] = checkout_transaction_id
+
+    if request.method == 'POST':
+        phone = request.POST.get('phone')
+        address = request.POST.get('address')
+        payment_method = request.POST.get('payment_method', 'COD')
+
+        # Kiểm tra tồn kho lần cuối trước khi chốt đơn
+        for item in items:
+            product = item.product
+            if product and product.stock is not None and item.quantity > product.stock:
+                messages.error(request, f'Sản phẩm "{product.name}" chỉ còn {product.stock} chiếc, không đủ để đặt {item.quantity} chiếc!')
+                return redirect('cart')
+
+        with transaction.atomic():
             new_order = Order.objects.create(
-                customer=customer, 
-                complete=True, 
+                customer=customer,
+                complete=True,
+                transaction_id=checkout_transaction_id,
                 payment_method=payment_method,
-                # Tự động để trạng thái Chờ xác nhận (Banking) hoặc Đã xác nhận (COD)
+                voucher=voucher,
+                voucher_discount=voucher_discount,
+                final_total=final_total,
                 status='Đã xác nhận' if payment_method == 'COD' else 'Chờ xác nhận'
             )
 
-            # 2. Chuyển các món khách ĐÃ CHỌN sang đơn hàng mới này
             for item in items:
                 item.order = new_order
-                item.save()
+                item.save(update_fields=['order'])
 
-            # 3. Lưu địa chỉ giao hàng
+            # Trừ kho thật sau khi chuyển item sang đơn mới
+            new_order.reduce_stock()
+
             ShippingAddress.objects.create(
                 customer=customer,
                 order=new_order,
                 address=address,
                 mobile=phone,
-                city="Thái Nguyên" # Bạn có thể thêm input tỉnh thành nếu muốn
+                city='Thái Nguyên'
             )
 
-            # --- THÊM THÔNG BÁO THEO PHƯƠNG THỨC THANH TOÁN ---
-            if payment_method == 'Banking':
-                messages.success(request, f'🎉 Đơn #{new_order.id} đang chờ xác nhận chuyển khoản! Shop sẽ kiểm tra và gửi hàng cho bạn ngay.')
-            else:
-                messages.success(request, f'🎉 Đơn #{new_order.id} đã được đặt thành công! Cảm ơn bạn đã mua sắm.')
+        request.session.pop('checkout_transaction_id', None)
 
-            return redirect('home')
+        if payment_method == 'Banking':
+            messages.success(request, f'🎉 Đơn #{new_order.id} đang chờ xác nhận chuyển khoản! Nội dung chuyển khoản: {new_order.transaction_id}')
+        else:
+            messages.success(request, f'🎉 Đơn #{new_order.id} đã được đặt thành công! Cảm ơn bạn đã mua sắm.')
 
-        # Gửi dữ liệu sang HTML
-        context = {
-            'items': items, 
-            'order': current_order, 
-            'cartItems': current_order.get_cart_items,
-            'total_selected': total_selected, 
-            'count_selected': count_selected  
-        }
-        return render(request, 'app/checkout.html', context)
-    else:
-        return redirect('login')
+        return redirect('home')
 
+    context = {
+        'items': items,
+        'order': current_order,
+        'cartItems': current_order.get_cart_items,
+        'total_selected': total_selected,
+        'voucher': voucher,
+        'voucher_discount': voucher_discount,
+        'final_total': final_total,
+        'count_selected': count_selected,
+        'checkout_transaction_id': checkout_transaction_id,
+    }
+    return render(request, 'app/checkout.html', context)
 
+@login_required(login_url='login')
 def updateItem(request):
-    data = json.loads(request.body)
-    productId = data['productId']
-    action = data['action']
-    
-    # 1. Lấy size từ data
-    size = data.get('size') 
-    
-    # 2. FIX: Nếu size là chuỗi rỗng thì chuyển thành None để khớp với Database
-    if size == "" or size == "None":
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Phương thức không hợp lệ'}, status=405)
+
+    try:
+        data = json.loads(request.body)
+        productId = data.get('productId')
+        action = data.get('action')
+        size = data.get('size')
+    except json.JSONDecodeError:
+        return JsonResponse({'status': 'error', 'message': 'Dữ liệu gửi lên không hợp lệ'}, status=400)
+
+    if size == '' or size == 'None':
         size = None
 
-    customer = request.user
-    product = Product.objects.get(id=productId)
-    order, created = Order.objects.get_or_create(customer=customer, complete=False)
+    if action not in ['add', 'remove', 'delete']:
+        return JsonResponse({'status': 'error', 'message': 'Hành động không hợp lệ'}, status=400)
 
-    # 3. Tìm hoặc tạo OrderItem
-    orderItem, created = OrderItem.objects.get_or_create(
-        order=order, 
-        product=product, 
-        size=size   
-    )
+    try:
+        product = Product.objects.get(id=productId)
+    except Product.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'Sản phẩm không tồn tại'}, status=404)
 
-   # XỬ LÝ LOGIC TỒN KHO TẠI ĐÂY
+    order, created = Order.objects.get_or_create(customer=request.user, complete=False)
+    orderItem, created = OrderItem.objects.get_or_create(order=order, product=product, size=size)
+
     if action == 'add':
-        # Kiểm tra: Nếu số lượng trong giỏ >= tồn kho thì BÁO LỖI VÀ CHẶN LẠI
-        if hasattr(product, 'stock') and product.stock is not None:
-            if orderItem.quantity >= product.stock:
-                return JsonResponse({
-                    'status': 'error', 
-                    'message': f'Rất tiếc, sản phẩm này chỉ còn {product.stock} chiếc trong kho!'
-                })
-        
-        # Nếu kho vẫn còn hàng thì mới cho cộng thêm
-        orderItem.quantity = (orderItem.quantity + 1)
-        
+        if product.stock is not None and orderItem.quantity >= product.stock:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Rất tiếc, sản phẩm này chỉ còn {product.stock} chiếc trong kho!'
+            })
+        orderItem.quantity += 1
     elif action == 'remove':
-        orderItem.quantity = (orderItem.quantity - 1)
+        orderItem.quantity -= 1
     elif action == 'delete':
         orderItem.quantity = 0
 
-    orderItem.save()
-
     if orderItem.quantity <= 0:
         orderItem.delete()
+    else:
+        orderItem.save()
 
-    # Nếu thành công, trả về status success
     return JsonResponse({'status': 'success', 'message': 'Cập nhật thành công'})
 from django.db.models import Count
 
@@ -391,7 +479,7 @@ def dashboard(request):
     total_revenue = 0
     for order in completed_orders:
         if order.status == 'Đã giao' or order.status == 'Đã xác nhận':
-            total_revenue += order.get_cart_total
+            total_revenue += order.get_cart_total_after_discount
 
     # 2. Lấy dữ liệu cho biểu đồ (Thống kê trạng thái đơn hàng)
     status_counts = Order.objects.values('status').annotate(count=Count('id'))
@@ -453,10 +541,32 @@ import json
 
 def apply_voucher(request):
     data = json.loads(request.body)
-    voucher_code = data.get('code')
+    voucher_code = data.get('code', '').strip()
+    total = data.get('total', 0)
+
+    try:
+        total = float(total)
+    except (TypeError, ValueError):
+        total = 0
+
+    if not voucher_code:
+        return JsonResponse({'success': False, 'message': 'Vui lòng nhập mã voucher!'})
     
     try:
-        voucher = Voucher.objects.get(code=voucher_code, active=True)
-        return JsonResponse({'success': True, 'discount': voucher.discount_amount})
+        voucher = Voucher.objects.get(code__iexact=voucher_code, active=True)
+        discount = voucher.get_discount(total)
+
+        if voucher.discount_type == 'percent':
+            message = f'✅ Đã áp dụng giảm {voucher.discount_percent}% (-{discount:,.0f}đ)'
+        else:
+            message = f'✅ Đã áp dụng giảm {discount:,.0f}đ'
+
+        return JsonResponse({
+            'success': True,
+            'discount': discount,
+            'discount_type': voucher.discount_type,
+            'discount_percent': voucher.discount_percent,
+            'message': message.replace(',', '.')
+        })
     except Voucher.DoesNotExist:
         return JsonResponse({'success': False, 'message': 'Mã không tồn tại hoặc đã hết hạn!'})

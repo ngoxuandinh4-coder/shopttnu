@@ -1,5 +1,6 @@
 {% extends 'app/base.html' %}
 {% load static %}
+{% load humanize %}
 
 {% block cart_content %}
 <div class="container my-5">
@@ -17,8 +18,8 @@
                         <div class="p-3">
                             <h6 class="text-truncate"><strong>{{product.name}}</strong></h6>
                             <hr>
-                            <h5 class="mt-3 text-danger text-end"><strong>{{product.price}} VND</strong></h5>
-                            <button data-product="{{product.id}}" data-action="add" class="btn btn-outline-secondary add-btn update-cart w-100">Thêm vào giỏ hàng</button>
+                            <h5 class="mt-3 text-danger text-end"><strong>{{ product.final_price|floatformat:0|intcomma }} VND</strong></h5>
+                            <a href="{% url 'detail' product.id %}" class="btn btn-outline-primary w-100 fw-bold">Xem chi tiết</a>
                         </div>
                     </div>
                 </div>

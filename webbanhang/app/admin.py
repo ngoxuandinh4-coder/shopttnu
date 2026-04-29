@@ -49,10 +49,17 @@ class OrderAdmin(admin.ModelAdmin):
     
     status_color.short_description = 'Trạng thái'
 
-    list_display = ['id', 'customer', 'payment_method', 'date_order', 'status_color','status']
+    list_display = ['id', 'customer', 'payment_method', 'date_order', 'status_color', 'status', 'stock_restored']
     list_editable = ['status']
     list_filter = ['status', 'payment_method']
     search_fields = ['id', 'customer__username']
+
+
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        # Khi admin xác nhận hoàn tiền/trả hàng, tự động cộng lại tồn kho 1 lần
+        if obj.status in ['Đã trả hàng/Hoàn tiền', 'Đã hủy']:
+            obj.restore_stock()
 
     def get_queryset(self, request):
         # Chỉ hiện các đơn đã bấm đặt hàng (complete=True)
@@ -87,8 +94,9 @@ class CustomerProfileAdmin(admin.ModelAdmin):
 
 @admin.register(Voucher)
 class VoucherAdmin(admin.ModelAdmin):
-    list_display = ('code', 'discount_amount', 'active')
-    list_editable = ('active', 'discount_amount') # Sửa trực tiếp ngoài bảng
+    list_display = ('code', 'discount_type', 'discount_amount', 'discount_percent', 'active')
+    list_editable = ('discount_type', 'discount_amount', 'discount_percent', 'active')
+    search_fields = ('code',)
 
 @admin.register(FlashSale)
 class FlashSaleAdmin(admin.ModelAdmin):
