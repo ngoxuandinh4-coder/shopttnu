@@ -13,8 +13,16 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 import os
 from pathlib import Path
 
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    load_dotenv = None
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+if load_dotenv:
+    load_dotenv(BASE_DIR / '.env')
 
 
 # Quick-start development settings - unsuitable for production
@@ -27,7 +35,7 @@ SECRET_KEY = 'django-insecure-0f07m*t)_8@#g@=8zhp0x!xevbf&9bysg()hh-wij^tc%flc&e
 DEBUG = True
 
 ALLOWED_HOSTS = ['*']
-CSRF_TRUSTED_ORIGINS = ['https://*.lhr.life']
+CSRF_TRUSTED_ORIGINS = ['https://*.lhr.life', 'https://*.trycloudflare.com']
 
 # Application definition
 
@@ -118,16 +126,14 @@ AUTH_PASSWORD_VALIDATORS = [
 # 1. Đường dẫn URL để truy cập tệp tĩnh
 STATIC_URL = 'static/'
 
-# 2. Khai báo các thư mục chứa tệp tĩnh
+# 2. Khai báo thư mục chứa tệp tĩnh
+# Chỉ dùng thư mục đang tồn tại để tránh cảnh báo staticfiles.W004
 STATICFILES_DIRS = [
-    BASE_DIR / 'app' / 'static',  # Chỉ định chính xác vào thư mục static của app
+    BASE_DIR / 'app' / 'static',
 ]
-STATICFILES_DIRS=[
-    os.path.join(BASE_DIR, 'static')
-]
-MEDIA_URL='/images/'
 
-MEDIA_ROOT = os.path.join(BASE_DIR,'app/static/images')
+MEDIA_URL = '/images/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'app/static/images')
 JAZZMIN_SETTINGS = {
     # Tên hiển thị trên tab trình duyệt
     "site_title": "Quản trị Shoppyy",
@@ -168,7 +174,7 @@ JAZZMIN_SETTINGS = {
     "show_ui_builder": False,
 }
 # In email ra màn hình Terminal để test Quên mật khẩu
-#EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+# EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 # CẤU HÌNH GỬI EMAIL THẬT QUA GMAIL
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
@@ -176,11 +182,13 @@ EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 
-# Điền Gmail của bạn (Email sẽ đứng ra gửi thư cho khách)
-EMAIL_HOST_USER = 'nhaday2009@gmail.com' 
-
-# Điền cái Mật khẩu ứng dụng 16 chữ cái bạn vừa tạo ở Bước 1 vào đây (KHÔNG phải mật khẩu login Gmail nhé)
-EMAIL_HOST_PASSWORD = 'etxqpboajwfexquu'
+# Không ghi Gmail và App Password trực tiếp trong code.
+# Hãy tạo file .env cùng cấp manage.py và khai báo:
+# EMAIL_HOST_USER=your_email@gmail.com
+# EMAIL_HOST_PASSWORD=your_app_password
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
+DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 
 # --- CẤU HÌNH NGÔN NGỮ VÀ MÚI GIỜ ---
 LANGUAGE_CODE = 'vi'

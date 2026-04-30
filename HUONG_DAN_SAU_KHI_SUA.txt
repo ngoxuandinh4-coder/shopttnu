@@ -1,0 +1,30 @@
+HUONG DAN CHAY PROJECT SAU KHI SUA
+
+1. Mo folder webbanhang trong Visual Studio Code.
+2. Cai thu vien:
+   pip install -r requirements.txt
+3. Neu can chuc nang quen mat khau gui Gmail that:
+   - Tao file .env cung cap voi manage.py
+   - Copy noi dung tu .env.example sang .env
+   - Thay EMAIL_HOST_USER va EMAIL_HOST_PASSWORD bang Gmail/App Password cua ban
+4. Chay migration:
+   python manage.py migrate
+5. Chay web:
+   python manage.py runserver
+
+GHI CHU CAC LOI DA SUA:
+- Da bo hard-code Gmail/App Password trong settings.py.
+- Da sua STATICFILES_DIRS bi khai bao trung va gay canh bao folder static khong ton tai.
+- Da them .vs/ vao .gitignore de khong day file rac Visual Studio len GitHub.
+- Da giu file migration merge 0020 de xu ly xung dot 2 migration 0019.
+- Da don __pycache__, *.pyc, .vs va .git trong file zip gui lai.
+
+LEN GITHUB TU FOLDER DANG CO .GIT CUA BAN:
+1. Copy cac file trong goi nay de len folder repo hien tai cua ban.
+2. Chay:
+   git add .
+   git commit -m "Sua cau hinh project va migration"
+   git pull origin main --rebase
+   git push origin main
+
+Neu bi conflict, chay git status roi xu ly file conflict truoc khi push.

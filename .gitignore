@@ -1,5 +1,27 @@
+# Python / Django
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+*.sqlite3-journal
+
+# Local environment / secrets
 .env
+.env.*
+!.env.example
+
+# Database demo/local
+# Nếu muốn đẩy database demo lên GitHub thì bỏ dòng db.sqlite3 này.
 db.sqlite3
+
+# IDE / editor
+.vs/
+.vscode/
+.idea/
+
+# OS / archives
+.DS_Store
+Thumbs.db
 *.zip
+
+# Media generated locally
+media/
