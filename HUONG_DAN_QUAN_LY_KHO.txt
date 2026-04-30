@@ -1,0 +1,22 @@
+ĐÃ SỬA PHẦN QUẢN LÝ KHO
+
+1. Đổi tên giao diện từ "Quản lý Nhập Kho" thành "Quản lý Kho".
+2. Vẫn giữ chức năng nhập thêm hàng vào kho.
+3. Thêm chức năng quản lý kho:
+   - Xem tổng số mặt hàng.
+   - Xem tổng tồn kho.
+   - Cảnh báo sản phẩm sắp hết hàng.
+   - Cảnh báo sản phẩm hết hàng.
+   - Tìm kiếm sản phẩm trong kho.
+   - Xem danh sách tồn kho từng sản phẩm.
+   - Cập nhật nhanh số lượng tồn kho trực tiếp trên trang Quản lý Kho.
+4. Admin cũng có thêm mục Quản lý Kho cho phiếu nhập kho.
+
+CÁCH CHẠY:
+
+pip install -r requirements.txt
+python manage.py migrate
+python manage.py runserver
+
+Sau đó đăng nhập tài khoản staff/admin và vào menu:
+Quản lý Kho

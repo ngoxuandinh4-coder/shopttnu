@@ -1,0 +1,272 @@
+{% extends 'app/base.html' %}
+{% load static %}
+{% load humanize %}
+
+{% block main-content %}
+<div class="container my-5">
+    <div class="row">
+        <div class="col-md-6 mb-4">
+            <img src="{{product.ImageURL}}" class="img-fluid w-100 shadow-sm" style="border-radius: 10px; object-fit: cover; max-height: 600px;">
+        </div>
+        
+        <div class="col-md-6">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'home' %}" style="text-decoration: none;">Trang chủ</a></li>
+                    <li class="breadcrumb-item active">{{product.name}}</li>
+                </ol>
+            </nav>
+            
+            <h2 class="fw-bold">{{product.name}}</h2>
+            
+            <div class="text-warning mb-2">
+                <i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i>
+                <span class="text-muted small ms-2">({{ product.reviews.count }} đánh giá)</span>
+            </div>
+
+            <hr>
+           {% if product.final_price < product.price %}
+    <p class="mb-0">
+        <del class="text-muted small">{{ product.price|floatformat:0|intcomma }} đ</del> 
+        <span class="text-danger fw-bold fs-5">{{ product.final_price|floatformat:0|intcomma }} đ</span>
+    </p>
+{% else %}
+<p class="text-danger fw-bold fs-5 mb-0">{{ product.price|floatformat:0|intcomma }} đ</p>
+{% endif %}
+            
+            <div class="mt-2 mb-4">
+                {% if product.stock <= 0 %}
+                    <span class="badge bg-danger px-3 py-2 shadow-sm" style="font-size: 0.95rem;">
+                        <i class="fas fa-times-circle me-1"></i> Đã hết hàng
+                    </span>
+                {% elif product.stock <= 5 %}
+                    <span class="badge bg-warning text-dark px-3 py-2 shadow-sm" style="font-size: 0.95rem; border: 1px dashed #dc3545;">
+                        <i class="fas fa-fire text-danger me-1"></i> Sắp cháy hàng: Chỉ còn {{ product.stock }} chiếc
+                    </span>
+                {% else %}
+                    <span class="badge bg-success px-3 py-2 shadow-sm opacity-75" style="font-size: 0.95rem;">
+                        <i class="fas fa-check-circle me-1"></i> Còn hàng
+                    </span>
+                {% endif %}
+            </div>
+            
+            <div class="mb-4">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <label class="fw-bold text-uppercase small">Chọn Size:</label>
+                    <a href="#" class="text-primary small fw-bold" style="text-decoration: none;" data-bs-toggle="modal" data-bs-target="#sizeGuideModal">
+                        <i class="fas fa-ruler-combined me-1"></i> Hướng dẫn chọn Size
+                    </a>
+                </div>
+                
+                <div class="d-flex gap-2 flex-wrap">
+                    <input type="radio" class="btn-check" name="product_size" id="size-S" value="S" autocomplete="off">
+                    <label class="btn btn-outline-dark px-3 py-2" for="size-S" style="min-width: 60px;">S</label>
+
+                    <input type="radio" class="btn-check" name="product_size" id="size-M" value="M" autocomplete="off">
+                    <label class="btn btn-outline-dark px-3 py-2" for="size-M" style="min-width: 60px;">M</label>
+
+                    <input type="radio" class="btn-check" name="product_size" id="size-L" value="L" autocomplete="off">
+                    <label class="btn btn-outline-dark px-3 py-2" for="size-L" style="min-width: 60px;">L</label>
+
+                    <input type="radio" class="btn-check" name="product_size" id="size-XL" value="XL" autocomplete="off">
+                    <label class="btn btn-outline-dark px-3 py-2" for="size-XL" style="min-width: 60px;">XL</label>
+                </div>
+            </div>
+
+            <p class="text-muted mb-4">
+                {{ product.description|default:"Chất liệu cao cấp, form dáng chuẩn đẹp, phù hợp cho nhiều dịp từ đi làm đến đi tiệc. Liên hệ shop để được tư vấn kỹ hơn." }}
+            </p>
+            
+            <div class="d-grid gap-2 d-md-flex justify-content-md-start mt-4">
+                {% if product.stock > 0 %}
+                    <button data-product="{{product.id}}" data-action="add" class="btn btn-danger btn-lg px-5 me-md-2 update-cart">
+                        <i class="fas fa-cart-plus me-2"></i>Thêm vào giỏ hàng
+                    </button>
+                {% else %}
+                    <button class="btn btn-secondary btn-lg px-5 me-md-2 disabled" style="cursor: not-allowed;">
+                        <i class="fas fa-ban me-2"></i>Sản phẩm tạm hết
+                    </button>
+                {% endif %}
+                <a href="{% url 'home' %}#danh-sach-san-pham" class="btn btn-outline-secondary btn-lg px-4">Quay lại</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-5">
+        <div class="col-12">
+            <h4 class="fw-bold border-bottom pb-3">Đánh giá từ khách hàng</h4>
+            
+            {% if request.user.is_authenticated and can_review %}
+            <div class="card border-0 bg-light mb-4 shadow-sm mt-3">
+                <div class="card-body p-4">
+                    <h6 class="fw-bold mb-3">Gửi đánh giá của bạn</h6>
+                    <form action="{% url 'add_review' product.id %}" method="POST">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label class="form-label small">Số sao:</label>
+                            <select name="rating" class="form-select w-auto">
+                                <option value="5">⭐⭐⭐⭐⭐ (Rất hài lòng)</option>
+                                <option value="4">⭐⭐⭐⭐ (Hài lòng)</option>
+                                <option value="3">⭐⭐⭐ (Bình thường)</option>
+                                <option value="2">⭐⭐ (Kém)</option>
+                                <option value="1">⭐ (Rất tệ)</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <textarea name="content" class="form-control" rows="3" placeholder="Sản phẩm mặc lên rất đẹp, vải mát..." required></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary px-4">Gửi feedback</button>
+                    </form>
+                </div>
+            </div>
+            {% elif request.user.is_authenticated and has_reviewed %}
+            <div class="alert alert-info mt-3">Bạn đã đánh giá sản phẩm này rồi.</div>
+            {% elif request.user.is_authenticated %}
+            <div class="alert alert-warning mt-3">Bạn chỉ có thể đánh giá sau khi mua sản phẩm và đơn hàng đã giao thành công.</div>
+            {% else %}
+            <div class="alert alert-light border mt-3">Vui lòng đăng nhập để đánh giá sau khi mua hàng.</div>
+            {% endif %}
+
+            <div class="mt-4">
+                {% for review in product.reviews.all %}
+                <div class="d-flex mb-4 pb-3 border-bottom">
+                    <div class="flex-shrink-0">
+                        <div class="rounded-circle bg-secondary text-white d-flex justify-content-center align-items-center fw-bold" style="width: 50px; height: 50px;">
+                            {{ review.customer.username|make_list|first|upper }}
+                        </div>
+                    </div>
+                    <div class="ms-3 flex-grow-1">
+                        <div class="d-flex justify-content-between">
+                            <h6 class="fw-bold mb-0">{{ review.customer.username }}</h6>
+                            <small class="text-muted">{{ review.date_added|date:"d/m/Y" }}</small>
+                        </div>
+                        <div class="text-warning small my-1">
+                            {% for i in "12345" %}
+                                {% if forloop.counter <= review.rating %}
+                                    <i class="fas fa-star"></i>
+                                {% else %}
+                                    <i class="far fa-star"></i>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                        <p class="mb-0 text-secondary">{{ review.content }}</p>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="text-center py-5">
+                    <p class="text-muted">Chưa có đánh giá nào cho sản phẩm này. Hãy là người đầu tiên!</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="sizeGuideModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="border-radius: 15px;">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold"><i class="fas fa-tshirt me-2"></i>Bảng Tư Vấn Size Nữ</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4 text-center">
+                <table class="table table-bordered align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Size</th>
+                            <th>Cân nặng</th>
+                            <th>Chiều cao</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td class="fw-bold">S</td><td>40 - 47kg</td><td>150 - 155cm</td></tr>
+                        <tr><td class="fw-bold">M</td><td>48 - 54kg</td><td>155 - 160cm</td></tr>
+                        <tr><td class="fw-bold">L</td><td>55 - 60kg</td><td>160 - 165cm</td></tr>
+                        <tr><td class="fw-bold">XL</td><td>61 - 68kg</td><td>165 - 170cm</td></tr>
+                    </tbody>
+                </table>
+                <p class="text-muted small italic mb-0">* Thông số mang tính tham khảo, khách nhắn tin shop để được tư vấn kỹ hơn nhé!</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        var addCartBtn = document.querySelector('.update-cart');
+        
+        if (addCartBtn) {
+            addCartBtn.addEventListener('click', function () {
+                var productId = this.dataset.product;
+                var action = this.dataset.action;
+                var size = null;
+
+                var sizeInputChecked = document.querySelector('input[name="product_size"]:checked');
+                if (sizeInputChecked) {
+                    size = sizeInputChecked.value;
+                } else {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Khoan đã!',
+                        text: 'Vui lòng chọn Size trước khi thêm vào giỏ hàng bạn nhé.',
+                        confirmButtonColor: '#198754'
+                    });
+                    return; 
+                }
+
+                if (typeof user !== 'undefined' && user === 'AnonymousUser') {
+                    Swal.fire({
+                        icon: 'info',
+                        title: 'Yêu cầu đăng nhập',
+                        text: 'Bạn cần đăng nhập để mua hàng!',
+                        confirmButtonColor: '#0d6efd'
+                    }).then((result) => {
+                        window.location.href = '/login/';
+                    });
+                } else {
+                    updateUserOrder(productId, action, size);
+                }
+            });
+        }
+
+        function updateUserOrder(productId, action, size) {
+            var url = '/update_item/';
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': typeof csrftoken !== 'undefined' ? csrftoken : '',
+                },
+                body: JSON.stringify({
+                    'productId': productId,
+                    'action': action,
+                    'size': size
+                })
+            })
+            .then((response) => response.json())
+            .then((data) => {
+                // KIỂM TRA LỖI TỒN KHO TỪ BACKEND
+                if (data.status === 'error') {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Giới hạn số lượng!',
+                        text: data.message,
+                        confirmButtonColor: '#ffc107',
+                        confirmButtonText: 'Đã hiểu'
+                    });
+                } else {
+                    Swal.fire({
+                        position: 'center',
+                        icon: 'success',
+                        title: 'Đã thêm vào giỏ hàng!',
+                        showConfirmButton: false,
+                        timer: 1500
+                    }).then(() => {
+                        window.location.href = '/cart/'; 
+                    });
+                }
+            });
+        }
+    });
+</script>
+{% endblock main-content %}

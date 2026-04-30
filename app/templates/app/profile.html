@@ -1,0 +1,83 @@
+{% extends 'app/base.html' %}
+{% load static %}
+
+{% block main-content %}
+<div class="container my-5">
+    <div class="row">
+        <div class="col-lg-4 mb-4">
+            <div class="card shadow-sm border-0 text-center p-4" style="border-radius: 15px;">
+                <div class="rounded-circle bg-dark text-white d-flex justify-content-center align-items-center mx-auto mb-3 shadow" 
+                     style="width: 100px; height: 100px; font-size: 40px; font-weight: bold;">
+                    {{ request.user.username|make_list|first|upper }}
+                </div>
+                <h4 class="fw-bold">{{ request.user.username }}</h4>
+                <p class="text-muted small">Thành viên từ: {{ request.user.date_joined|date:"d/m/Y" }}</p>
+                <hr>
+                <div class="text-start">
+                    <p class="small mb-1 text-muted">Trạng thái tài khoản:</p>
+                    <span class="badge bg-success-soft text-success p-2 w-100" style="background-color: #e8f5e9;">Đã xác thực</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-8">
+            <div class="card shadow-sm border-0 p-4" style="border-radius: 15px;">
+                <h4 class="fw-bold mb-4"><i class="fas fa-user-cog me-2 text-primary"></i>Cập nhật thông tin cá nhân</h4>
+                
+                <form method="POST" action="{% url 'profile' %}">
+                    {% csrf_token %}
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold small text-secondary">Tên đăng nhập (Username)</label>
+                            <input type="text" name="username" class="form-control" value="{{ request.user.username }}" required>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold small text-secondary">Địa chỉ Email</label>
+                            <input type="email" name="email" class="form-control" value="{{ request.user.email }}" required>
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold small text-secondary">Số điện thoại</label>
+                            <input type="text" name="phone" class="form-control" value="{{ customer_profile.phone|default:'' }}" placeholder="Nhập số điện thoại...">
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold small text-danger">Mật khẩu mới (Để trống nếu không đổi)</label>
+                            <input type="password" name="password" class="form-control" placeholder="********">
+                        </div>
+
+                        <div class="col-12 mb-4">
+                            <label class="form-label fw-bold small text-secondary">Địa chỉ nhận hàng mặc định</label>
+                            <textarea name="address" class="form-control" rows="3" placeholder="Số nhà, đường, phường/xã, quận/huyện...">{{ customer_profile.address|default:'' }}</textarea>
+                        </div>
+                    </div>
+
+                    <div class="text-end border-top pt-3">
+                        <button type="submit" class="btn btn-primary px-5 fw-bold shadow-sm py-2">
+                            <i class="fas fa-save me-2"></i>LƯU THÔNG TIN
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .form-control {
+        border-radius: 8px;
+        padding: 10px 15px;
+        border: 1px solid #dee2e6;
+        background-color: #f8f9fa;
+    }
+    .form-control:focus {
+        background-color: #fff;
+        border-color: #0d6efd;
+        box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.1);
+    }
+    .btn-primary {
+        border-radius: 8px;
+    }
+</style>
+{% endblock main-content %}
