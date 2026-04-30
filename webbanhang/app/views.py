@@ -536,8 +536,7 @@ def manage_inventory(request):
     return render(request, 'app/manage_inventory.html', context)
 
 
-from django.http import JsonResponse
-import json
+
 
 def apply_voucher(request):
     data = json.loads(request.body)
