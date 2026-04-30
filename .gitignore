@@ -25,3 +25,24 @@ Thumbs.db
 
 # Media generated locally
 media/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environment
+.env
+venv/
+.venv/
+
+# Database local
+db.sqlite3
+
+# Visual Studio / VS Code
+.vs/
+.vscode/
+
+# Zip files
+*.zip
